@@ -318,7 +318,7 @@ async function loadAll() {
       bantRows:     raw['bant']        || []
     };
     DB = DB_raw;
-    clients = clientRows;
+    clients = DB_raw.clientRows;
 
     const sel = document.getElementById('client-select');
     sel.innerHTML = clients.map(c => `<option value="${c.client_id}">${c.client_name}</option>`).join('');
