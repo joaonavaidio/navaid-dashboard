@@ -146,7 +146,7 @@
       <strong style="color:var(--text);">File → Share → Publish to web → Publish</strong>
     </p>
     <p style="margin-bottom:14px;">Then reload this page.</p>
-    <p>Sheet ID: <code>1oa5LGw0bSB1ockFrqQ3q6ofPdrA6BUa7DujZgof2i8M</code></p>
+    <p>Verifique se o Apps Script está publicado como <strong style='color:var(--text)'>qualquer pessoa</strong>.</p>
     <p id="error-detail" style="margin-top:12px;font-size:12px;color:var(--red);font-family:var(--mono);word-break:break-all;"></p>
     <button class="btn" style="margin:16px auto 0;justify-content:center;" onclick="loadAll()">Try again</button>
   </div>
@@ -282,41 +282,15 @@
 /* ═══════════════════════════════════════════════════
    CONFIG — troque só o SHEET_ID para novos clientes
    ═══════════════════════════════════════════════════ */
-const SHEET_ID = '1oa5LGw0bSB1ockFrqQ3q6ofPdrA6BUa7DujZgof2i8M';
+const API_URL = 'https://script.google.com/macros/s/AKfycbx22VluvA1k1WM6flKGIjnojFvqIYKTjB0_hPnRW2oa9PWVXEsbur4q4YdvywMhZIH5GQ/exec';
 
-/* Busca uma aba via JSONP com timeout de 12s */
-function fetchSheet(tabName) {
-  return new Promise((resolve, reject) => {
-    const cb     = 'navaid_cb_' + Math.random().toString(36).substr(2, 9);
-    const script = document.createElement('script');
-    const url    = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq`+
-                   `?tqx=out:json&callback=${cb}&sheet=${encodeURIComponent(tabName)}`;
-
-    const timer = setTimeout(() => {
-      delete window[cb]; script.remove();
-      reject(new Error('Timeout: ' + tabName));
-    }, 12000);
-
-    window[cb] = function(data) {
-      clearTimeout(timer); delete window[cb]; script.remove();
-      try {
-        if (!data.table || !data.table.cols) { resolve([]); return; }
-        const cols = data.table.cols.map(c => c.label.toLowerCase().replace(/\s+/g,'_'));
-        const rows = (data.table.rows || [])
-          .filter(r => r.c && r.c.some(c => c && c.v !== null))
-          .map(r => {
-            const obj = {};
-            r.c.forEach((cell, i) => { obj[cols[i]] = cell ? cell.v : null; });
-            return obj;
-          });
-        resolve(rows);
-      } catch(e) { reject(e); }
-    };
-
-    script.onerror = () => { clearTimeout(timer); delete window[cb]; script.remove(); reject(new Error('Sheet not found: ' + tabName)); };
-    script.src = url;
-    document.head.appendChild(script);
-  });
+/* Busca todos os dados via Google Apps Script API */
+async function fetchAllData() {
+  const res  = await fetch(API_URL);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  if (!data || typeof data !== 'object') throw new Error('Invalid response from API');
+  return data;
 }
 
 function latest(rows, id) {
@@ -334,11 +308,16 @@ let bantChart, lossChart, activityChart;
 async function loadAll() {
   show('loading-screen'); hide('app-header'); hide('app-main'); hide('app-footer'); hide('error-screen');
   try {
-    const [clientRows, pipelineRows, ratesRows, activityRows, lossRows, bantRows] = await Promise.all([
-      fetchSheet('clients'), fetchSheet('pipeline'), fetchSheet('rates'),
-      fetchSheet('activity'), fetchSheet('loss reason'), fetchSheet('bant')
-    ]);
-    DB = { clientRows, pipelineRows, ratesRows, activityRows, lossRows, bantRows };
+    const raw = await fetchAllData();
+    const DB_raw = {
+      clientRows:   raw['clients']     || [],
+      pipelineRows: raw['pipeline']    || [],
+      ratesRows:    raw['rates']       || [],
+      activityRows: raw['activity']    || [],
+      lossRows:     raw['loss reason'] || [],
+      bantRows:     raw['bant']        || []
+    };
+    DB = DB_raw;
     clients = clientRows;
 
     const sel = document.getElementById('client-select');
